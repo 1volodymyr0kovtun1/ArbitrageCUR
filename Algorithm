@@ -1,0 +1,240 @@
+import Alamofire
+import SwiftyJSON
+import Foundation
+
+let CUR = ["AMD", "AVAX", "AZN", "BCH", "BNB", "BTC", "BUSD", "CAD", "CGPT", "CHF", "CNY", "CRMS", "CZK", "DAI", "DASH", "DKK", "DOGE", "ETH", "EUR", "GBP", "IDR", "INR", "ISK", "JPY", "KRW", "KZT", "LTC", "MATIC", "MYR", "NOK", "PHP", "PKR", "PLN", "RUB", "SEK", "SOL", "THB", "TMT", "TON", "TRX", "TRY", "UAH", "USD", "USDC", "USDT", "UZS", "VERSE", "VND", "XMR"]
+
+var transformArrayOfValues = [[Double]]()
+
+var values = [[Double]]()
+
+class Node {
+    var name: String
+    var predecessor: Node?
+    var adjacencyList: [Edge]
+    var minDistance: Double
+    
+    init(name: String) {
+        self.name = name
+        self.predecessor = nil
+        self.adjacencyList = []
+        self.minDistance = Double.infinity
+    }
+}
+
+class Edge {
+    
+    var weight: Double
+    var startVertex: Node
+    var targetVertex: Node
+    
+    init(weight: Double, startVertex: Node, targetVertex: Node) {
+        self.weight = weight
+        self.startVertex = startVertex
+        self.targetVertex = targetVertex
+    }
+}
+
+class BellmanFord {
+    
+    var vertexList: [Node]
+    var edgeList: [Edge]
+    var startVertex: Node
+    var cycleList: [Node]
+    var hasCycle: Bool
+    
+    init(vertexList: [Node], edgeList: [Edge], startVertex: Node) {
+        self.vertexList = vertexList
+        self.edgeList = edgeList
+        self.startVertex = startVertex
+        self.cycleList = []
+        self.hasCycle = false
+    }
+    
+    func calculateShortestPath() {
+        self.startVertex.minDistance = 0
+        
+        for _ in 0..<vertexList.count-1 {
+            for edge in edgeList {
+                let u = edge.startVertex
+                let v = edge.targetVertex
+                let dist = u.minDistance + edge.weight
+                
+                if dist < v.minDistance {
+                    v.minDistance = dist
+                    v.predecessor = u
+                }
+            }
+        }
+        
+        for edge in edgeList {
+            if checkCycle(edge: edge) {
+                print("Negative cycle detected...")
+                var vertex = edge.startVertex
+                
+                while vertex !== edge.targetVertex {
+                    self.cycleList.append(vertex)
+                    vertex = vertex.predecessor!
+                    print(vertex.name)
+                }
+                
+                self.cycleList.append(edge.targetVertex)
+                
+                for v in self.cycleList {
+                    print(v.name)
+                }
+                return
+            }
+        }
+    }
+    
+    func checkCycle(edge: Edge) -> Bool {
+        if edge.startVertex.minDistance + edge.weight < edge.targetVertex.minDistance {
+            self.hasCycle = true
+            return true
+        } else {
+            return false
+        }
+    }
+    
+    func getShortestPathTo(targetVertex: Node) {
+        if !self.hasCycle {
+            print("Shortest path exists with value: ", targetVertex.minDistance)
+            var node: Node? = targetVertex
+            
+            while node != nil {
+                print("\(node!.name) ")
+                node = node!.predecessor
+            }
+        } else {
+            print("No shortest path because of negative cycle...")
+        }
+    }
+}
+
+func setupGraph(currencies: [String], values: [[Double]]) {
+    
+    //    let currencies = ["USD", "EUR", "GBP", "CHF", "CAD"]
+    //
+    //        // Assuming 'values' is a 5x5 2D array with the weights between each pair of currencies
+    //        // For simplicity, diagonal elements can be set to a dummy value (e.g., 0) as they won't be used
+    //        let values: [[Double]] = [
+    //            [0, -1 * log(0.741), -1 * log(0.657), -1 * log(1.061), -1 * log(1.005)],
+    //            [-1 * log(1.349), 0, -1 * log(0.888), -1 * log(1.433), -1 * log(1.366)],
+    //            [-1 * log(1.521), -1 * log(1.126), 0, -1 * log(1.614), -1 * log(1.538)],
+    //            [-1 * log(0.942), -1 * log(0.698), -1 * log(0.619), 0, -1 * log(0.953)],
+    //            [-1 * log(0.995), -1 * log(0.732), -1 * log(0.650), -1 * log(1.049), 0]
+    //        ]
+    
+    var nodes = [String: Node]()
+    var edges = [Edge]()
+    
+    // Create nodes for each currency
+    for currency in currencies {
+        nodes[currency] = Node(name: currency)
+    }
+    
+    // Create edges between each pair of currencies
+    for i in 0..<currencies.count {
+        for j in 0..<currencies.count {
+            if i != j, let fromNode = nodes[currencies[i]], let toNode = nodes[currencies[j]] {
+                let weight = values[i][j]
+                let edge = Edge(weight: weight, startVertex: fromNode, targetVertex: toNode)
+                fromNode.adjacencyList.append(edge)
+                edges.append(edge)
+            }
+        }
+    }
+    
+    let startNode = nodes["SOL"]! // !!!
+    let algorithm = BellmanFord(vertexList: Array(nodes.values), edgeList: edges, startVertex: startNode)
+    algorithm.calculateShortestPath()
+    algorithm.getShortestPathTo(targetVertex: nodes["TRX"]!) // !!!
+    
+}
+
+// transforn in 0 in i = j, and -1*ln(values[i][j])
+
+func transformArray(_ array2D: [[Double]]) -> [[Double]] {
+    var transformedArray = array2D
+    
+    for i in 0..<array2D.count {
+        for j in 0..<array2D[i].count {
+            if i == j {
+                transformedArray[i][j] = 0 // !
+            } else {
+                transformedArray[i][j] = -1 * log(array2D[i][j])
+            }
+        }
+    }
+    return transformedArray
+}
+
+// Sorting json in correct order
+
+func sortJsonResponsesByCurrency(jsonResponses: JSON) -> JSON {
+    var sortedArray: [JSON] = []
+    
+    for name in CUR {
+        for jsonResponse in jsonResponses {
+            if jsonResponse.1["to"].string! == name {
+                sortedArray.append(jsonResponse.1)
+            }
+        }
+    }
+    
+    return JSON(sortedArray)
+}
+
+
+// URL with alamofire and SwiftyJson
+
+@main
+enum Executable {
+    
+    static func main() async {
+        do {
+            for from in CUR {
+                let jsonResponses = try await performRequest(url: "https://api.cryptomus.com/v1/exchange-rate/\(from)/list")["result"]
+                let sortedJsonResponses = sortJsonResponsesByCurrency(jsonResponses: jsonResponses)
+                
+                var valuesForCurrens = [Double]()
+                for response in sortedJsonResponses {
+                    var courseValue = response.1["course"].doubleValue
+                    if courseValue.isZero {
+                        var smallNumber = Decimal(string: "0.000000000001") ?? Decimal.zero
+                        courseValue = NSDecimalNumber(decimal: smallNumber).doubleValue // Convert Decimal to Double
+                    }
+                    valuesForCurrens.append(courseValue)
+                }
+                // WRONG API at CRMS have no converter to CRMS
+                if from == "CRMS" && valuesForCurrens.count == 48 {
+                    if let index = CUR.firstIndex(of: "CRMS") {
+                        valuesForCurrens.insert(1.0, at: index)
+                    }
+                }
+                values.append(valuesForCurrens)
+            }
+            transformArrayOfValues = transformArray(values)
+            print(transformArrayOfValues)
+//            print(transformArrayOfValues)
+            setupGraph(currencies: CUR, values: transformArrayOfValues) //!!
+        } catch {
+            print("Error: \(error)")
+        }
+    }
+    
+    static func performRequest(url: String) async throws -> JSON {
+        return try await withCheckedThrowingContinuation { continuation in
+            AF.request(url).responseJSON { response in
+                switch response.result {
+                case .success(let value):
+                    let json = JSON(value)
+                    continuation.resume(returning: json)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+}
